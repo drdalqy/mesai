@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
@@ -32,7 +32,26 @@
     <div class="max-w-md mx-auto pt-6">
         <div class="mb-8 text-center">
             <h1 class="text-3xl font-black text-slate-800 tracking-tight uppercase">Mesai Paneli</h1>
-            <p class="text-slate-500 font-medium"></p>
+            <p class="text-slate-500 font-medium italic"></p>
+        </div>
+
+        <div class="mb-6">
+            <label class="text-xs font-bold text-slate-400 uppercase ml-1">Görüntülenen Ay</label>
+            <select id="ayFiltre" onchange="ayKaydetveGuncelle()" class="w-full p-4 bg-white rounded-2xl shadow-sm border-none outline-none text-lg font-bold text-indigo-600">
+                <option value="2025-12">Aralık 2025</option>
+                <option value="2026-01">Ocak 2026</option>
+                <option value="2026-02">Şubat 2026</option>
+                <option value="2026-03">Mart 2026</option>
+                <option value="2026-04">Nisan 2026</option>
+                <option value="2026-05">Mayıs 2026</option>
+                <option value="2026-06">Haziran 2026</option>
+                <option value="2026-07">Temmuz 2026</option>
+                <option value="2026-08">Ağustos 2026</option>
+                <option value="2026-09">Eylül 2026</option>
+                <option value="2026-10">Ekim 2026</option>
+                <option value="2026-11">Kasım 2026</option>
+                <option value="2026-12">Aralık 2026</option>
+            </select>
         </div>
 
         <div class="mermer-card p-6 mb-6">
@@ -43,7 +62,7 @@
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="text-xs font-bold text-slate-400 uppercase ml-1">Toplam Saat</label>
+                        <label class="text-xs font-bold text-slate-400 uppercase ml-1">Saat</label>
                         <input type="number" id="saat" placeholder="0" class="w-full p-4 bg-slate-50 rounded-xl border-none outline-none text-lg">
                     </div>
                     <div>
@@ -59,11 +78,11 @@
 
         <div class="grid grid-cols-2 gap-4 mb-8">
             <div class="bg-slate-800 p-5 rounded-3xl text-white text-center">
-                <p class="text-[10px] font-bold opacity-60 uppercase mb-1">Toplam Saat</p>
+                <p class="text-[10px] font-bold opacity-60 uppercase mb-1">Aylık Toplam Saat</p>
                 <span id="toplamSaat" class="text-3xl font-black">0</span>
             </div>
             <div class="bg-emerald-500 p-5 rounded-3xl text-white text-center">
-                <p class="text-[10px] font-bold opacity-60 uppercase mb-1">Toplam TL</p>
+                <p class="text-[10px] font-bold opacity-60 uppercase mb-1">Aylık Kazanç</p>
                 <span id="toplamKazanc" class="text-2xl font-black">0 TL</span>
             </div>
         </div>
@@ -71,6 +90,7 @@
         <h3 class="font-bold text-slate-800 mb-4 px-2 flex items-center gap-2">
             <i class="fas fa-history text-slate-400"></i> Kayıt Geçmişi
         </h3>
+
         <div id="liste" class="space-y-4 pb-10"></div>
     </div>
 
@@ -91,12 +111,30 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const colRef = collection(db, "mesailer");
+        let tumKayitlar = [];
 
-        // Sayfa açıldığında hafızadaki ücreti getir
         window.onload = () => {
+            // Hafızadaki ücreti getir
             const sonUcret = localStorage.getItem('kayitliUcret') || 250;
             document.getElementById('ucret').value = sonUcret;
             document.getElementById('tarih').valueAsDate = new Date();
+
+            // HAFIZADAKİ AYI GETİR (Yeni Özellik)
+            const sonSecilenAy = localStorage.getItem('kayitliAy');
+            if (sonSecilenAy) {
+                document.getElementById('ayFiltre').value = sonSecilenAy;
+            } else {
+                const simdi = new Date();
+                const formatliAy = simdi.getFullYear() + "-" + String(simdi.getMonth() + 1).padStart(2, '0');
+                document.getElementById('ayFiltre').value = formatliAy;
+            }
+        };
+
+        // AY SEÇİLDİĞİNDE HAFIZAYA KAYDET (Yeni Fonksiyon)
+        window.ayKaydetveGuncelle = () => {
+            const secilenAy = document.getElementById('ayFiltre').value;
+            localStorage.setItem('kayitliAy', secilenAy);
+            listeyiGuncelle();
         };
 
         window.kaydet = async () => {
@@ -104,46 +142,40 @@
             const u = parseFloat(document.getElementById('ucret').value);
             const t = document.getElementById('tarih').value;
             if (!s) return alert("Lütfen saat gir!");
-
-            // Ücreti hafızaya kaydet
             localStorage.setItem('kayitliUcret', u);
-
-            const btn = document.getElementById('btn');
-            btn.innerText = "İŞLENİYOR...";
             await addDoc(colRef, { tarih: t, saat: s, ucret: u, toplam: s * u, created: new Date() });
             document.getElementById('saat').value = "";
-            btn.innerHTML = '<i class="fas fa-plus-circle"></i> SİSTEME İŞLE';
         };
 
         window.kayitSil = async (id) => {
-            if (confirm("Bu kaydı silmek istediğine emin misin baba?")) {
-                await deleteDoc(doc(db, "mesailer", id));
-            }
+            if (confirm("Silmek istiyor musun baba?")) { await deleteDoc(doc(db, "mesailer", id)); }
         };
 
-        const q = query(colRef, orderBy("tarih", "desc"));
-        onSnapshot(q, (snaps) => {
+        onSnapshot(query(colRef, orderBy("tarih", "desc")), (snaps) => {
+            tumKayitlar = snaps.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            listeyiGuncelle();
+        });
+
+        window.listeyiGuncelle = () => {
+            const secilenAy = document.getElementById('ayFiltre').value;
             const list = document.getElementById('liste');
             let tS = 0; let tK = 0;
             list.innerHTML = "";
-            snaps.forEach(snap => {
-                const d = snap.data();
-                const id = snap.id;
-                tS += d.saat; tK += d.toplam;
 
-                const dateObj = new Date(d.tarih);
-                const formatliTarih = dateObj.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
-                const gunAdi = dateObj.toLocaleDateString('tr-TR', { weekday: 'long' });
+            tumKayitlar.forEach(d => {
+                if (d.tarih.substring(0, 7) === secilenAy) {
+                    tS += d.saat; tK += d.toplam;
+                    const dObj = new Date(d.tarih);
+                    const tamTarih = dObj.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+                    const gunAdi = dObj.toLocaleDateString('tr-TR', { weekday: 'long' });
 
-                list.innerHTML += `
+                    list.innerHTML += `
                         <div class="bg-white p-5 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100">
                             <div class="flex items-center gap-4">
-                                <button onclick="kayitSil('${id}')" class="btn-sil text-slate-300">
-                                    <i class="fas fa-trash-alt text-lg"></i>
-                                </button>
+                                <button onclick="kayitSil('${d.id}')" class="text-slate-300 hover:text-red-500"><i class="fas fa-trash-alt text-lg"></i></button>
                                 <div>
-                                    <p class="text-sm font-black text-indigo-600 uppercase tracking-tight">${formatliTarih}</p>
-                                    <p class="text-[11px] text-slate-400 font-bold uppercase mb-1">${gunAdi}</p>
+                                    <p class="text-sm font-black text-indigo-600 uppercase tracking-tight">${tamTarih}</p>
+                                    <p class="text-[10px] text-slate-400 font-bold uppercase mb-1">${gunAdi}</p>
                                     <p class="font-bold text-slate-700 text-lg">${d.saat} Saat Çalışma</p>
                                 </div>
                             </div>
@@ -152,10 +184,11 @@
                                 <p class="text-[10px] text-slate-400 font-bold">${d.ucret} TL/saat</p>
                             </div>
                         </div>`;
+                }
             });
             document.getElementById('toplamSaat').innerText = tS;
             document.getElementById('toplamKazanc').innerText = tK.toLocaleString() + " TL";
-        });
+        };
     </script>
 </body>
 </html>
