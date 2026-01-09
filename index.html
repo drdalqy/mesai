@@ -1,0 +1,161 @@
+﻿<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mermer Mesai Takip</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #f3f4f6;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .mermer-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+
+        .btn-kaydet {
+            background: #1e293b;
+            transition: all 0.2s;
+        }
+
+            .btn-kaydet:active {
+                transform: scale(0.95);
+            }
+    </style>
+</head>
+<body class="p-4">
+    <div class="max-w-md mx-auto pt-6">
+        <div class="mb-8 text-center">
+            <h1 class="text-3xl font-black text-slate-800 tracking-tight uppercase">Mesai Paneli</h1>
+            <p class="text-slate-500 font-medium"></p>
+        </div>
+
+        <div class="mermer-card p-6 mb-6">
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs font-bold text-slate-400 uppercase ml-1">Çalışma Tarihi</label>
+                    <input type="date" id="tarih" class="w-full p-4 bg-slate-50 rounded-xl border-none outline-none text-lg">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 uppercase ml-1">Toplam Saat</label>
+                        <input type="number" id="saat" placeholder="0" class="w-full p-4 bg-slate-50 rounded-xl border-none outline-none text-lg">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 uppercase ml-1">Saatlik TL</label>
+                        <input type="number" id="ucret" class="w-full p-4 bg-slate-50 rounded-xl border-none outline-none text-lg">
+                    </div>
+                </div>
+                <button onclick="kaydet()" id="btn" class="btn-kaydet w-full text-white p-5 rounded-2xl font-bold text-xl shadow-lg flex justify-center items-center gap-2">
+                    <i class="fas fa-plus-circle"></i> SİSTEME İŞLE
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mb-8">
+            <div class="bg-slate-800 p-5 rounded-3xl text-white text-center">
+                <p class="text-[10px] font-bold opacity-60 uppercase mb-1">Toplam Saat</p>
+                <span id="toplamSaat" class="text-3xl font-black">0</span>
+            </div>
+            <div class="bg-emerald-500 p-5 rounded-3xl text-white text-center">
+                <p class="text-[10px] font-bold opacity-60 uppercase mb-1">Toplam TL</p>
+                <span id="toplamKazanc" class="text-2xl font-black">0 TL</span>
+            </div>
+        </div>
+
+        <h3 class="font-bold text-slate-800 mb-4 px-2 flex items-center gap-2">
+            <i class="fas fa-history text-slate-400"></i> Kayıt Geçmişi
+        </h3>
+        <div id="liste" class="space-y-4 pb-10"></div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDgRV3NEU_eMgtw7-FdEbw66vWRgCSP8O8",
+            authDomain: "mesai-780c0.firebaseapp.com",
+            projectId: "mesai-780c0",
+            storageBucket: "mesai-780c0.firebasestorage.app",
+            messagingSenderId: "64714806050",
+            appId: "1:64714806050:web:8138f4325f0e96d7050b7b",
+            measurementId: "G-5FHTTEB6HC"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const colRef = collection(db, "mesailer");
+
+        // Sayfa açıldığında hafızadaki ücreti getir
+        window.onload = () => {
+            const sonUcret = localStorage.getItem('kayitliUcret') || 250;
+            document.getElementById('ucret').value = sonUcret;
+            document.getElementById('tarih').valueAsDate = new Date();
+        };
+
+        window.kaydet = async () => {
+            const s = parseFloat(document.getElementById('saat').value);
+            const u = parseFloat(document.getElementById('ucret').value);
+            const t = document.getElementById('tarih').value;
+            if (!s) return alert("Lütfen saat gir!");
+
+            // Ücreti hafızaya kaydet
+            localStorage.setItem('kayitliUcret', u);
+
+            const btn = document.getElementById('btn');
+            btn.innerText = "İŞLENİYOR...";
+            await addDoc(colRef, { tarih: t, saat: s, ucret: u, toplam: s * u, created: new Date() });
+            document.getElementById('saat').value = "";
+            btn.innerHTML = '<i class="fas fa-plus-circle"></i> SİSTEME İŞLE';
+        };
+
+        window.kayitSil = async (id) => {
+            if (confirm("Bu kaydı silmek istediğine emin misin baba?")) {
+                await deleteDoc(doc(db, "mesailer", id));
+            }
+        };
+
+        const q = query(colRef, orderBy("tarih", "desc"));
+        onSnapshot(q, (snaps) => {
+            const list = document.getElementById('liste');
+            let tS = 0; let tK = 0;
+            list.innerHTML = "";
+            snaps.forEach(snap => {
+                const d = snap.data();
+                const id = snap.id;
+                tS += d.saat; tK += d.toplam;
+
+                const dateObj = new Date(d.tarih);
+                const formatliTarih = dateObj.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+                const gunAdi = dateObj.toLocaleDateString('tr-TR', { weekday: 'long' });
+
+                list.innerHTML += `
+                        <div class="bg-white p-5 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100">
+                            <div class="flex items-center gap-4">
+                                <button onclick="kayitSil('${id}')" class="btn-sil text-slate-300">
+                                    <i class="fas fa-trash-alt text-lg"></i>
+                                </button>
+                                <div>
+                                    <p class="text-sm font-black text-indigo-600 uppercase tracking-tight">${formatliTarih}</p>
+                                    <p class="text-[11px] text-slate-400 font-bold uppercase mb-1">${gunAdi}</p>
+                                    <p class="font-bold text-slate-700 text-lg">${d.saat} Saat Çalışma</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-xl font-black text-emerald-600">${d.toplam} TL</p>
+                                <p class="text-[10px] text-slate-400 font-bold">${d.ucret} TL/saat</p>
+                            </div>
+                        </div>`;
+            });
+            document.getElementById('toplamSaat').innerText = tS;
+            document.getElementById('toplamKazanc').innerText = tK.toLocaleString() + " TL";
+        });
+    </script>
+</body>
+</html>
